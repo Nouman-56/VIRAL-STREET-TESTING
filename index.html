@@ -327,8 +327,8 @@
         let currentPage = 1;
         let itemsPerPage = 10;
         
-        // Download counter for 5 ads before download
-        let downloadAdCounts = {};
+        // Download counter for 5 ads before download (using localStorage to persist)
+        let downloadAdCounts = JSON.parse(localStorage.getItem('downloadAdCounts')) || {};
         
         // ========== VIDEO PLAYBACK ==========
         async function handlePlay(videoId) {
@@ -367,7 +367,7 @@
         
         async function incrementViews(id){ try{ await db.collection("viral_videos").doc(id).update({views: firebase.firestore.FieldValue.increment(1)}); }catch(e){} }
         
-        // ========== DOWNLOAD WITH 5 ADS ==========
+        // ========== DOWNLOAD WITH 5 ADS (CORRECTED - AD FIRST, THEN DOWNLOAD AFTER 5 ADS) ==========
         function downloadVideo(vid){
             let video = currentVideos.find(v=>v.id===vid);
             if(!video || !video.videoUrl){
@@ -377,20 +377,25 @@
             
             if(!downloadAdCounts[vid]) downloadAdCounts[vid] = 0;
             
-            if(downloadAdCounts[vid] < 5){
-                downloadAdCounts[vid]++;
-                let remaining = 5 - downloadAdCounts[vid];
-                let adLink = "https://www.profitablecpmratenetwork.com/mk65i19v?key=e9f9c255c82dc28e0a257559b623568d";
-                window.open(adLink, '_blank');
-                showToast(`⚠️ Ad ${downloadAdCounts[vid]}/5 - ${remaining} more ad(s) to unlock download`, false);
-            } else {
+            // If user has already watched 5 ads, download directly without ad
+            if(downloadAdCounts[vid] >= 5){
                 // Download the video
                 let a = document.createElement('a');
                 a.href = video.videoUrl;
                 a.download = `${video.title}.mp4`;
                 a.click();
                 showToast(`✅ Download started: ${video.title}`);
+                // Reset counter for this video
                 downloadAdCounts[vid] = 0;
+                localStorage.setItem('downloadAdCounts', JSON.stringify(downloadAdCounts));
+            } else {
+                // Show ad first, then increment counter
+                let adLink = "https://www.profitablecpmratenetwork.com/mk65i19v?key=e9f9c255c82dc28e0a257559b623568d";
+                window.open(adLink, '_blank');
+                downloadAdCounts[vid]++;
+                let remaining = 5 - downloadAdCounts[vid];
+                localStorage.setItem('downloadAdCounts', JSON.stringify(downloadAdCounts));
+                showToast(`⚠️ Ads watched: ${downloadAdCounts[vid]}/5 - ${remaining} more ad(s) to unlock download`, false);
             }
         }
         
