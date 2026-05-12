@@ -1,22 +1,3 @@
-## ✅ Changes I will make in the HTML:
-
-1. **Fix Video Modal Close Button** - Ensure video closes properly when clicking the X button (already working, but will verify)
-
-2. **Remove Long Press Download Option from Video Player** - Add CSS to disable native browser context menu on video element so user cannot long-press to download
-
-3. **Add proper close button functionality** - Make sure video stops playing when modal is closed
-
-4. **Disable default video controls download option** - The native `controls` attribute adds a download button in some browsers, will remove it and keep custom controls or disable download via `controlsList="nodownload"`
-
-### Summary of fixes:
-- Add `controlsList="nodownload"` to video tag to prevent native download button
-- Add CSS `user-select: none; -webkit-touch-callout: none;` on video to prevent long press menu
-- Ensure close button properly stops video playback
-- Everything else remains exactly the same
-
----
-
-```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
