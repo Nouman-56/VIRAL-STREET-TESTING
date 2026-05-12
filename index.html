@@ -1,3 +1,22 @@
+## ✅ Changes I will make in the HTML:
+
+1. **Fix Video Modal Close Button** - Ensure video closes properly when clicking the X button (already working, but will verify)
+
+2. **Remove Long Press Download Option from Video Player** - Add CSS to disable native browser context menu on video element so user cannot long-press to download
+
+3. **Add proper close button functionality** - Make sure video stops playing when modal is closed
+
+4. **Disable default video controls download option** - The native `controls` attribute adds a download button in some browsers, will remove it and keep custom controls or disable download via `controlsList="nodownload"`
+
+### Summary of fixes:
+- Add `controlsList="nodownload"` to video tag to prevent native download button
+- Add CSS `user-select: none; -webkit-touch-callout: none;` on video to prevent long press menu
+- Ensure close button properly stops video playback
+- Everything else remains exactly the same
+
+---
+
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -134,6 +153,13 @@
         /* Professional Video Container with Overlay Ad */
         .video-wrapper { position: relative; width: 100%; background: #000; }
         .video-wrapper video { width: 100%; display: block; }
+        /* Disable long press context menu on video */
+        .video-wrapper video {
+            pointer-events: auto;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
         .video-overlay-ad { position: absolute; bottom: 15px; right: 15px; background: rgba(0,0,0,0.75); border-radius: 8px; padding: 5px; backdrop-filter: blur(8px); z-index: 10; border: 1px solid rgba(229,9,20,0.4); max-width: 300px; }
         .video-overlay-ad iframe, .video-overlay-ad div { max-width: 100%; border-radius: 6px; }
         
@@ -254,7 +280,7 @@
                 <button class="close-modal-btn" onclick="closeVideoModal()"><i class="fas fa-times"></i></button>
             </div>
             <div class="video-wrapper" id="videoWrapper">
-                <video id="videoPlayer" controls playsinline>
+                <video id="videoPlayer" controls controlsList="nodownload" oncontextmenu="return false;" playsinline>
                     <source id="videoSource" src="">
                 </video>
                 <!-- Overlay Ad - Bottom Right (300x250) -->
@@ -617,3 +643,4 @@
     </script>
 </body>
 </html>
+```
