@@ -327,6 +327,11 @@
         
         let currentUser = null;
         let currentUserMembership = { active: false };
+        let anonymousId = localStorage.getItem('anonymousId');
+        if(!anonymousId){
+            anonymousId = 'anon_' + Math.random().toString(36).substr(2, 9);
+            localStorage.setItem('anonymousId', anonymousId);
+        }
         
         function updateLocalCoinUI() { document.getElementById('coinAmount').innerText = localCoins; }
         updateLocalCoinUI();
@@ -336,6 +341,67 @@
         
         // Download counter for 5 ads before download (using localStorage to persist)
         let downloadAdCounts = JSON.parse(localStorage.getItem('downloadAdCounts')) || {};
+        
+        // ========== TRACK AD CLICK IN FIRESTORE ==========
+        async function trackAdClick(adType, buttonId){
+            try{
+                let clickData = {
+                    adType: adType,
+                    adButtonId: buttonId,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                    date: new Date().toISOString(),
+                    userAgent: navigator.userAgent,
+                    platform: navigator.platform
+                };
+                
+                if(currentUser){
+                    clickData.userId = currentUser.uid;
+                    clickData.username = currentUsername;
+                    clickData.email = currentUser.email;
+                    clickData.isLoggedIn = true;
+                } else {
+                    clickData.userId = anonymousId;
+                    clickData.username = null;
+                    clickData.isLoggedIn = false;
+                }
+                
+                // Store individual click
+                await db.collection("adClicks").add(clickData);
+                
+                // Update total clicks counter
+                const totalStatsRef = db.collection("totalStats").doc("adClicks");
+                const totalStatsDoc = await totalStatsRef.get();
+                if(totalStatsDoc.exists){
+                    await totalStatsRef.update({
+                        totalClicks: firebase.firestore.FieldValue.increment(1),
+                        lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                } else {
+                    await totalStatsRef.set({
+                        totalClicks: 1,
+                        lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+                
+                // If user is logged in, also update user's personal click count
+                if(currentUser){
+                    const userRef = db.collection("users").doc(currentUser.uid);
+                    await userRef.update({
+                        adClicks: firebase.firestore.FieldValue.increment(1),
+                        lastAdClick: firebase.firestore.FieldValue.serverTimestamp()
+                    }).catch(async () => {
+                        await userRef.set({
+                            adClicks: 1,
+                            lastAdClick: firebase.firestore.FieldValue.serverTimestamp()
+                        }, { merge: true });
+                    });
+                }
+                
+                console.log("✅ Ad click tracked successfully!");
+            } catch(error){
+                console.error("Error tracking ad click:", error);
+            }
+        }
         
         // ========== VIDEO PLAYBACK ==========
         async function handlePlay(videoId) {
@@ -374,7 +440,7 @@
         
         async function incrementViews(id){ try{ await db.collection("viral_videos").doc(id).update({views: firebase.firestore.FieldValue.increment(1)}); }catch(e){} }
         
-        // ========== DOWNLOAD WITH 5 ADS (CORRECTED - AD FIRST, THEN DOWNLOAD AFTER 5 ADS) ==========
+        // ========== DOWNLOAD WITH 5 ADS ==========
         function downloadVideo(vid){
             let video = currentVideos.find(v=>v.id===vid);
             if(!video || !video.videoUrl){
@@ -384,19 +450,15 @@
             
             if(!downloadAdCounts[vid]) downloadAdCounts[vid] = 0;
             
-            // If user has already watched 5 ads, download directly without ad
             if(downloadAdCounts[vid] >= 5){
-                // Download the video
                 let a = document.createElement('a');
                 a.href = video.videoUrl;
                 a.download = `${video.title}.mp4`;
                 a.click();
                 showToast(`✅ Download started: ${video.title}`);
-                // Reset counter for this video
                 downloadAdCounts[vid] = 0;
                 localStorage.setItem('downloadAdCounts', JSON.stringify(downloadAdCounts));
             } else {
-                // Show ad first, then increment counter
                 let adLink = "https://www.profitablecpmratenetwork.com/mk65i19v?key=e9f9c255c82dc28e0a257559b623568d";
                 window.open(adLink, '_blank');
                 downloadAdCounts[vid]++;
@@ -406,7 +468,7 @@
             }
         }
         
-        // ========== ADS WITH DAILY LIMIT ==========
+        // ========== ADS WITH DAILY LIMIT + TRACKING ==========
         function renderCoinsButtons(){
             let container=document.getElementById('coinsButtonsGrid'); if(!container) return;
             container.innerHTML='';
@@ -434,6 +496,9 @@
                 return;
             }
             
+            // Track ad click in Firestore BEFORE opening ad
+            await trackAdClick('free_coins_ad', buttonId);
+            
             let adLink = "https://www.profitablecpmratenetwork.com/mk65i19v?key=e9f9c255c82dc28e0a257559b623568d";
             showToast("Opening ad... stay for 10 seconds to earn 10 coins!");
             let adWindow = window.open(adLink, '_blank');
@@ -460,6 +525,8 @@
         function openTelegram() { window.open("https://t.me/boost/viralstreet69", '_blank'); }
         
         // ========== AUTH FUNCTIONS ==========
+        let currentUsername = "";
+        
         function openLoginModal(){ document.getElementById('loginModal').classList.add('active'); }
         function closeLoginModal(){ document.getElementById('loginModal').classList.remove('active'); if(typeof hcaptcha !== 'undefined') try{ hcaptcha.reset(); }catch(e){} }
         function openSignupModal(){ document.getElementById('signupModal').classList.add('active'); }
@@ -590,7 +657,26 @@
         }
         function updateCategoryTitle(){ document.getElementById('categoryTitle').innerHTML=currentCategory==='all'?'📺 All Videos':currentCategory==='premium'?'🔥 Premium Free':'🇮🇳 Indian/Pakistani Scandals'; }
         
-        auth.onAuthStateChanged(async(user)=>{ if(user){ let doc=await db.collection("users").doc(user.uid).get(); if(doc.exists){ currentUser=user; currentUserMembership.active=doc.data().membershipActive||false; document.getElementById('authButtons').style.display='none'; document.getElementById('userInfo').style.display='flex'; document.getElementById('userName').innerHTML=doc.data().username; document.getElementById('membershipBadge').style.display=currentUserMembership.active?'inline-block':'none'; } } else { currentUser=null; currentUserMembership.active=false; document.getElementById('authButtons').style.display='flex'; document.getElementById('userInfo').style.display='none'; document.getElementById('membershipBadge').style.display='none'; } });
+        auth.onAuthStateChanged(async(user)=>{ 
+            if(user){ 
+                let doc=await db.collection("users").doc(user.uid).get(); 
+                if(doc.exists){ 
+                    currentUser=user; 
+                    currentUsername=doc.data().username;
+                    currentUserMembership.active=doc.data().membershipActive||false; 
+                    document.getElementById('authButtons').style.display='none'; 
+                    document.getElementById('userInfo').style.display='flex'; 
+                    document.getElementById('userName').innerHTML=doc.data().username; 
+                    document.getElementById('membershipBadge').style.display=currentUserMembership.active?'inline-block':'none'; 
+                } 
+            } else { 
+                currentUser=null; 
+                currentUserMembership.active=false; 
+                document.getElementById('authButtons').style.display='flex'; 
+                document.getElementById('userInfo').style.display='none'; 
+                document.getElementById('membershipBadge').style.display='none'; 
+            } 
+        });
         
         document.getElementById('searchBtn').addEventListener('click',()=>{ searchQuery=document.getElementById('searchInput').value; currentPage=1; renderVideosWithPagination(); });
         document.getElementById('prevSlide').addEventListener('click',prevSlide); document.getElementById('nextSlide').addEventListener('click',nextSlide); document.getElementById('logoBtn').addEventListener('click',()=>window.location.reload());
@@ -624,4 +710,3 @@
     </script>
 </body>
 </html>
-```
